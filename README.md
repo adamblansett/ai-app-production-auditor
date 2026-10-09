@@ -59,6 +59,37 @@ Every check produces an evidence-backed diagnostic result with stable identifier
 
 ---
 
+## AST-Powered Static Analysis Engine
+
+The auditor uses a dedicated Abstract Syntax Tree (AST) analysis subsystem powered by the **TypeScript Compiler API** (`ts.createSourceFile`). This brings compiler-grade precision to source code inspection:
+
+### 1. Supported File Formats & Dialects
+
+- **TypeScript:** `.ts`, `.tsx`, `.mts`, `.cts`
+- **JavaScript:** `.js`, `.jsx`, `.mjs`, `.cjs`
+- **Non-Script Files:** Structured regex/pattern matching is retained as a fallback for non-script files (such as `.env`, `.json`, `.yaml`, `.yml`, `.toml`, `.md`).
+
+### 2. Elimination of False Positives
+
+- **Comments & Documentation Ignored:** Code comments (`// ...`, `/* ... */`) and JSDoc blocks mentioning development URLs (e.g. `// Connect to http://localhost:3000`) or environment variables are excluded because they do not form executable AST nodes.
+- **Context-Sensitive Matching:** TLS options like `rejectUnauthorized: false` are only flagged when associated with network clients, `https.Agent` instantiations, or TLS socket configuration—avoiding false positives on unrelated application domain objects.
+
+### 3. Syntax Recognition Capabilities
+
+- **Environment Variables:** Analyzes `process.env.VAR`, `process.env['VAR']`, `import.meta.env.VAR`, and object destructuring declarations and assignments (`const { API_KEY } = process.env`). Computed accesses without static literals are safely flagged as dynamic without generating false identifier names.
+- **Localhost & Loopback URLs:** Inspects string literals, untagged template literals, and template expression heads/spans for `http://localhost`, `https://localhost`, `127.0.0.1`, and IPv6 `[::1]`.
+- **Client-Side Secret Exposure:** Flags frontend framework configurations and client files where public prefixes (`NEXT_PUBLIC_*`, `VITE_*`) are combined with sensitive tokens (`SECRET`, `PRIVATE`, `PASSWORD`, `API_KEY`, `TOKEN`).
+- **Insecure TLS Settings:** Flags assignments to `process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'` and context-validated `rejectUnauthorized: false`.
+
+### 4. Safety & Robustness Guarantees
+
+- **Zero Execution:** Target source files are parsed statically into AST nodes; code is **never dynamically imported, evaluated, or executed**.
+- **No Dependency Requirements:** Scanning does not require `node_modules` or dependencies to be installed in the target repository.
+- **Graceful Syntax Error Handling:** Files containing syntax errors or incomplete code are reported with non-fatal diagnostics in `skippedFiles`, allowing the rest of the project audit to continue uninterrupted.
+- **Caching & Deduplication:** Abstract syntax trees are memoized per file across rules during each audit run, ensuring fast execution and guaranteeing zero duplicate findings between AST rules and non-script regex fallbacks.
+
+---
+
 ## Severity Model
 
 Findings are categorized into five standard severity levels reflecting operational impact:

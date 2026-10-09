@@ -112,41 +112,70 @@ export class SecretDetectionRule implements Rule {
         continue;
       }
 
-      const content = context.getFileContent(file.relativePath);
-      if (!content) continue;
-
-      for (const pattern of SECRET_PATTERNS) {
-        pattern.regex.lastIndex = 0;
-        let match: RegExpExecArray | null;
-
-        while ((match = pattern.regex.exec(content)) !== null) {
-          const secretValue = pattern.extractValue ? pattern.extractValue(match) : match[0];
-
-          if (IGNORED_SECRET_PLACEHOLDERS.has(secretValue.toLowerCase())) {
-            continue;
-          }
-
-          const loc = getLocationFromIndex(content, match.index);
-          const redactedValue = redactSecret(secretValue);
-          const safeEvidence = redactEvidence(loc.lineSnippet || redactedValue, [secretValue]);
+      // Inspect script files with AST to avoid false positives on comments
+      if (context.analyzer?.isEligibleForAst(file.relativePath)) {
+        const matches = context.analyzer.analyzeSecretLiterals(file);
+        for (const m of matches) {
+          const redactedValue = redactSecret(m.matchedValue);
+          const safeEvidence = redactEvidence(m.location.snippet || redactedValue, [
+            m.matchedValue,
+          ]);
 
           findings.push(
             createFinding({
               ruleId: this.id,
-              title: `Potential credential detected: ${pattern.name}`,
+              title: `Potential credential detected: ${m.secretType}`,
               severity: 'critical',
               category: this.category,
-              message: `A potential credential matching pattern "${pattern.name}" was detected in ${file.relativePath}. Value masked: ${redactedValue}.`,
+              message: `A potential credential matching pattern "${m.secretType}" was detected in ${file.relativePath}. Value masked: ${redactedValue}.`,
               evidence: safeEvidence,
               file: file.relativePath,
-              line: loc.line,
-              column: loc.column,
+              line: m.location.line,
+              column: m.location.column,
               remediation:
                 'Remove the credential immediately, rotate the key in the provider dashboard, and store it securely using environment variables or a secret manager.',
               confidence: 'high',
               documentationUrl: this.documentationUrl,
             }),
           );
+        }
+      } else {
+        const content = context.getFileContent(file.relativePath);
+        if (!content) continue;
+
+        for (const pattern of SECRET_PATTERNS) {
+          pattern.regex.lastIndex = 0;
+          let match: RegExpExecArray | null;
+
+          while ((match = pattern.regex.exec(content)) !== null) {
+            const secretValue = pattern.extractValue ? pattern.extractValue(match) : match[0];
+
+            if (IGNORED_SECRET_PLACEHOLDERS.has(secretValue.toLowerCase())) {
+              continue;
+            }
+
+            const loc = getLocationFromIndex(content, match.index);
+            const redactedValue = redactSecret(secretValue);
+            const safeEvidence = redactEvidence(loc.lineSnippet || redactedValue, [secretValue]);
+
+            findings.push(
+              createFinding({
+                ruleId: this.id,
+                title: `Potential credential detected: ${pattern.name}`,
+                severity: 'critical',
+                category: this.category,
+                message: `A potential credential matching pattern "${pattern.name}" was detected in ${file.relativePath}. Value masked: ${redactedValue}.`,
+                evidence: safeEvidence,
+                file: file.relativePath,
+                line: loc.line,
+                column: loc.column,
+                remediation:
+                  'Remove the credential immediately, rotate the key in the provider dashboard, and store it securely using environment variables or a secret manager.',
+                confidence: 'high',
+                documentationUrl: this.documentationUrl,
+              }),
+            );
+          }
         }
       }
     }

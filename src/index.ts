@@ -43,3 +43,4 @@ export { writeReportToFile, type WriteReportOptions } from './reporters/writer.j
 export { redactSecret, redactEvidence, maskSensitiveValue } from './utils/redaction.js';
 export { collectFiles, type CollectedFile, type SkippedFile } from './fs/file-collector.js';
 export { validateDirectory, isPathInside, normalizePath } from './fs/path-utils.js';
+export * from './analysis/index.js';

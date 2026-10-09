@@ -8,6 +8,7 @@ import { createDefaultRules } from '../rules/rule-registry.js';
 import type { RuleContext, CheckStatus } from '../models/rule.js';
 import { AuditReportSchema, type AuditReport, type ScanSummary } from '../models/report.js';
 import type { Finding, Severity } from '../models/finding.js';
+import { SourceAnalyzer } from '../analysis/source-analysis.js';
 
 export interface AuditOptions {
   config?: AuditorConfig;
@@ -41,6 +42,9 @@ export async function runAudit(
   // Project discovery
   const project = detectProject(resolvedTarget);
 
+  // Initialize AST source analyzer for syntax-aware static analysis
+  const analyzer = new SourceAnalyzer(fileCollection);
+
   // Build rule context
   const ruleContext: RuleContext = {
     targetDir: resolvedTarget,
@@ -49,6 +53,7 @@ export async function runAudit(
     config: config.rules ?? {},
     getFileContent: fileCollection.getFileContent,
     hasFile: fileCollection.hasFile,
+    analyzer,
   };
 
   const rules = options.rules ?? createDefaultRules();
@@ -166,10 +171,16 @@ export async function runAudit(
     summary,
     findings: allFindings,
     checks,
-    skippedFiles: fileCollection.skippedFiles.map((s) => ({
-      path: s.path,
-      reason: s.reason,
-    })),
+    skippedFiles: [
+      ...fileCollection.skippedFiles.map((s) => ({
+        path: s.path,
+        reason: s.reason,
+      })),
+      ...analyzer.getParseDiagnostics().map((d) => ({
+        path: d.path,
+        reason: `Source parsing syntax warning: ${d.message}`,
+      })),
+    ],
   };
 
   // Validate the final report structure against the Zod schema

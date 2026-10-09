@@ -3,6 +3,8 @@ import type { Severity } from './finding.js';
 import type { ProjectInfo } from '../discovery/types.js';
 import type { CollectedFile } from '../fs/file-collector.js';
 
+import type { SourceAnalyzer } from '../analysis/source-analysis.js';
+
 export interface RuleContext {
   targetDir: string;
   project: ProjectInfo;
@@ -10,6 +12,7 @@ export interface RuleContext {
   config: RuleConfigMap;
   getFileContent(relativePath: string): string | null;
   hasFile(relativePath: string): boolean;
+  analyzer?: SourceAnalyzer;
 }
 
 export type RuleConfigMap = Record<

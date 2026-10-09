@@ -1,6 +1,7 @@
 import type { Rule, RuleContext, RuleResult } from '../models/rule.js';
 import { createFinding, type Finding } from '../models/finding.js';
 import { getLocationFromIndex } from '../utils/text.js';
+import { redactEvidence } from '../utils/redaction.js';
 
 const TLS_BYPASS_REGEX =
   /(?:NODE_TLS_REJECT_UNAUTHORIZED\s*=\s*['"]0['"]|rejectUnauthorized\s*:\s*false)/gi;
@@ -15,6 +16,8 @@ const SOURCE_CONFIG_EXTENSIONS = new Set([
   '.jsx',
   '.mjs',
   '.cjs',
+  '.mts',
+  '.cts',
   '.json',
   '.env',
   '.env.example',
@@ -37,55 +40,108 @@ export class ProductionConfigRule implements Rule {
     for (const file of context.files) {
       if (!SOURCE_CONFIG_EXTENSIONS.has(file.extension)) continue;
 
-      const content = context.getFileContent(file.relativePath);
-      if (!content) continue;
+      // Use AST analysis for JavaScript/TypeScript files
+      if (context.analyzer?.isEligibleForAst(file.relativePath)) {
+        // CFG001 via AST
+        const tlsMatches = context.analyzer.analyzeTlsConfiguration(file);
+        for (const tls of tlsMatches) {
+          findings.push(
+            createFinding({
+              ruleId: 'CFG001',
+              title: 'TLS certificate validation disabled',
+              severity: 'high',
+              category: this.category,
+              message: `TLS certificate verification appears disabled in ${file.relativePath}: ${tls.explanation}`,
+              evidence: tls.location.snippet || tls.pattern,
+              file: file.relativePath,
+              line: tls.location.line,
+              column: tls.location.column,
+              remediation:
+                'Enable standard TLS certificate validation for production environments.',
+              confidence: tls.confidence,
+              documentationUrl: this.documentationUrl,
+            }),
+          );
+        }
 
-      // Check for TLS rejection bypass
-      TLS_BYPASS_REGEX.lastIndex = 0;
-      let tlsMatch: RegExpExecArray | null;
-      while ((tlsMatch = TLS_BYPASS_REGEX.exec(content)) !== null) {
-        const loc = getLocationFromIndex(content, tlsMatch.index);
-        findings.push(
-          createFinding({
-            ruleId: 'CFG001',
-            title: 'TLS certificate validation disabled',
-            severity: 'high',
-            category: this.category,
-            message: `TLS certificate verification appears disabled via "${tlsMatch[0]}" in ${file.relativePath}. This exposes network connections to man-in-the-middle attacks.`,
-            evidence: loc.lineSnippet || tlsMatch[0],
-            file: file.relativePath,
-            line: loc.line,
-            column: loc.column,
-            remediation: 'Enable standard TLS certificate validation for production environments.',
-            confidence: 'high',
-            documentationUrl: this.documentationUrl,
-          }),
-        );
-      }
+        // CFG002 via AST
+        const exposures = context.analyzer.analyzeClientExposure(file);
+        for (const exp of exposures) {
+          const maskedSnippet = exp.rawValue
+            ? redactEvidence(exp.location.snippet, [exp.rawValue])
+            : exp.location.snippet;
 
-      // Check for frontend exposed secrets via public prefixes
-      PUBLIC_SECRET_PREFIX_REGEX.lastIndex = 0;
-      let pubMatch: RegExpExecArray | null;
-      while ((pubMatch = PUBLIC_SECRET_PREFIX_REGEX.exec(content)) !== null) {
-        const varName = pubMatch[0];
-        const loc = getLocationFromIndex(content, pubMatch.index);
-        findings.push(
-          createFinding({
-            ruleId: 'CFG002',
-            title: 'Potential secret exposed via client-side public variable prefix',
-            severity: 'high',
-            category: this.category,
-            message: `The variable "${varName}" uses a client-accessible prefix (NEXT_PUBLIC_ or VITE_) alongside a sensitive identifier (SECRET, PRIVATE, or PASSWORD). This will bundle the secret into client-side assets visible to end-users.`,
-            evidence: loc.lineSnippet || varName,
-            file: file.relativePath,
-            line: loc.line,
-            column: loc.column,
-            remediation:
-              'Move private API keys and secrets to server-side environment variables without client-exposed prefixes.',
-            confidence: 'high',
-            documentationUrl: this.documentationUrl,
-          }),
-        );
+          findings.push(
+            createFinding({
+              ruleId: 'CFG002',
+              title: 'Potential secret exposed via client-side public variable prefix',
+              severity: 'high',
+              category: this.category,
+              message: `The variable "${exp.variableName}" uses a client-accessible prefix (NEXT_PUBLIC_ or VITE_) alongside a sensitive identifier (SECRET, PRIVATE, or PASSWORD). This exposes the value to client-side assets visible to end-users.`,
+              evidence: maskedSnippet || exp.variableName,
+              file: file.relativePath,
+              line: exp.location.line,
+              column: exp.location.column,
+              remediation:
+                'Move private API keys and secrets to server-side environment variables without client-exposed prefixes.',
+              confidence: exp.confidence,
+              documentationUrl: this.documentationUrl,
+            }),
+          );
+        }
+      } else {
+        // Fallback pattern matching for non-script configuration files (.env, .json)
+        const content = context.getFileContent(file.relativePath);
+        if (!content) continue;
+
+        // Check for TLS rejection bypass in config files
+        TLS_BYPASS_REGEX.lastIndex = 0;
+        let tlsMatch: RegExpExecArray | null;
+        while ((tlsMatch = TLS_BYPASS_REGEX.exec(content)) !== null) {
+          const loc = getLocationFromIndex(content, tlsMatch.index);
+          findings.push(
+            createFinding({
+              ruleId: 'CFG001',
+              title: 'TLS certificate validation disabled',
+              severity: 'high',
+              category: this.category,
+              message: `TLS certificate verification appears disabled via "${tlsMatch[0]}" in ${file.relativePath}. This exposes network connections to man-in-the-middle attacks.`,
+              evidence: loc.lineSnippet || tlsMatch[0],
+              file: file.relativePath,
+              line: loc.line,
+              column: loc.column,
+              remediation:
+                'Enable standard TLS certificate validation for production environments.',
+              confidence: 'high',
+              documentationUrl: this.documentationUrl,
+            }),
+          );
+        }
+
+        // Check for frontend exposed secrets via public prefixes in config files (.env, .env.example)
+        PUBLIC_SECRET_PREFIX_REGEX.lastIndex = 0;
+        let pubMatch: RegExpExecArray | null;
+        while ((pubMatch = PUBLIC_SECRET_PREFIX_REGEX.exec(content)) !== null) {
+          const varName = pubMatch[0];
+          const loc = getLocationFromIndex(content, pubMatch.index);
+          findings.push(
+            createFinding({
+              ruleId: 'CFG002',
+              title: 'Potential secret exposed via client-side public variable prefix',
+              severity: 'high',
+              category: this.category,
+              message: `The variable "${varName}" uses a client-accessible prefix (NEXT_PUBLIC_ or VITE_) alongside a sensitive identifier (SECRET, PRIVATE, or PASSWORD). This will bundle the secret into client-side assets visible to end-users.`,
+              evidence: loc.lineSnippet || varName,
+              file: file.relativePath,
+              line: loc.line,
+              column: loc.column,
+              remediation:
+                'Move private API keys and secrets to server-side environment variables without client-exposed prefixes.',
+              confidence: 'high',
+              documentationUrl: this.documentationUrl,
+            }),
+          );
+        }
       }
     }
 

@@ -40,9 +40,18 @@ const SOURCE_EXTENSIONS = new Set([
   '.jsx',
   '.mjs',
   '.cjs',
+  '.mts',
+  '.cts',
   '.vue',
   '.svelte',
 ]);
+
+interface VarOccurrence {
+  file: string;
+  line: number;
+  column: number;
+  snippet: string;
+}
 
 export class EnvConsistencyRule implements Rule {
   readonly id = 'ENV001';
@@ -74,10 +83,7 @@ export class EnvConsistencyRule implements Rule {
     }
 
     // Collect all referenced environment variables from source files
-    const referencedVars = new Map<
-      string,
-      { file: string; line: number; column: number; snippet: string }[]
-    >();
+    const referencedVars = new Map<string, VarOccurrence[]>();
 
     for (const file of context.files) {
       if (!SOURCE_EXTENSIONS.has(file.extension)) continue;
@@ -92,29 +98,48 @@ export class EnvConsistencyRule implements Rule {
         continue;
       }
 
-      const content = context.getFileContent(file.relativePath);
-      if (!content) continue;
+      // If analyzer is available and file is eligible, use AST analysis
+      if (context.analyzer?.isEligibleForAst(file.relativePath)) {
+        const astRefs = context.analyzer.analyzeEnvironmentVariables(file);
+        for (const ref of astRefs) {
+          if (ref.isDynamic || ref.name === '<dynamic>') {
+            continue; // Ignore dynamic computed property names
+          }
+          if (IGNORED_ENV_VARS.has(ref.name)) {
+            continue;
+          }
 
-      PROCESS_ENV_REGEX.lastIndex = 0;
-      let match: RegExpExecArray | null;
-
-      while ((match = PROCESS_ENV_REGEX.exec(content)) !== null) {
-        const varName = match[1] || match[2] || match[3] || match[4];
-        if (!varName) continue;
-
-        if (IGNORED_ENV_VARS.has(varName)) {
-          continue;
+          const occurrences = referencedVars.get(ref.name) ?? [];
+          occurrences.push({
+            file: file.relativePath,
+            line: ref.location.line,
+            column: ref.location.column,
+            snippet: ref.location.snippet,
+          });
+          referencedVars.set(ref.name, occurrences);
         }
+      } else {
+        // Fallback regex for non-AST source formats (.vue, .svelte)
+        const content = context.getFileContent(file.relativePath);
+        if (!content) continue;
 
-        const loc = getLocationFromIndex(content, match.index);
-        const occurrences = referencedVars.get(varName) ?? [];
-        occurrences.push({
-          file: file.relativePath,
-          line: loc.line,
-          column: loc.column,
-          snippet: loc.lineSnippet,
-        });
-        referencedVars.set(varName, occurrences);
+        PROCESS_ENV_REGEX.lastIndex = 0;
+        let match: RegExpExecArray | null;
+
+        while ((match = PROCESS_ENV_REGEX.exec(content)) !== null) {
+          const varName = match[1] || match[2] || match[3] || match[4];
+          if (!varName || IGNORED_ENV_VARS.has(varName)) continue;
+
+          const loc = getLocationFromIndex(content, match.index);
+          const occurrences = referencedVars.get(varName) ?? [];
+          occurrences.push({
+            file: file.relativePath,
+            line: loc.line,
+            column: loc.column,
+            snippet: loc.lineSnippet,
+          });
+          referencedVars.set(varName, occurrences);
+        }
       }
     }
 
@@ -175,7 +200,6 @@ function parseEnvKeys(content: string): Set<string> {
   for (const rawLine of lines) {
     const line = rawLine.trim();
     if (!line || line.startsWith('#')) continue;
-    // Format: KEY=VALUE or export KEY=VALUE
     const cleanLine = line.startsWith('export ') ? line.slice(7).trim() : line;
     const eqIndex = cleanLine.indexOf('=');
     if (eqIndex > 0) {

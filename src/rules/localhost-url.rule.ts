@@ -4,7 +4,7 @@ import { getLocationFromIndex } from '../utils/text.js';
 
 // Matches http://localhost, https://localhost, 127.0.0.1, [::1], 0.0.0.0 with optional port and path
 const LOCALHOST_URL_REGEX =
-  /\bhttps?:\/\/(?:localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)(?::\d{1,5})?(?:\/[^\s"'`<>)]*)?/gi;
+  /\bhttps?:\/\/(?:localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)(?![a-zA-Z0-9.-])(?::\d{1,5})?(?:[/?#][^\s"'`<>)]*)?/gi;
 
 const EXCLUDED_EXTENSIONS = new Set([
   '.md',
@@ -48,34 +48,59 @@ export class LocalhostUrlRule implements Rule {
         continue;
       }
 
-      const content = context.getFileContent(file.relativePath);
-      if (!content) continue;
+      // If file is supported script file and analyzer is available, use syntax-aware AST analysis
+      if (context.analyzer?.isEligibleForAst(file.relativePath)) {
+        const matches = context.analyzer.analyzeLocalhostUrls(file);
+        for (const match of matches) {
+          findings.push(
+            createFinding({
+              ruleId: this.id,
+              title: 'Hardcoded localhost URL detected',
+              severity: 'medium',
+              category: this.category,
+              message: `A hardcoded development URL (${match.url}) was detected in ${file.relativePath}. If deployed to production, client requests will target the end-user's local machine or fail to resolve.`,
+              evidence: match.location.snippet || match.url,
+              file: file.relativePath,
+              line: match.location.line,
+              column: match.location.column,
+              remediation:
+                'Replace the hardcoded URL with a dynamic environment variable (e.g. process.env.API_URL or NEXT_PUBLIC_API_URL) or a relative path.',
+              confidence: 'high',
+              documentationUrl: this.documentationUrl,
+            }),
+          );
+        }
+      } else {
+        // Fallback to pattern-based scanning for non-script configuration files (e.g., .json, .yaml)
+        const content = context.getFileContent(file.relativePath);
+        if (!content) continue;
 
-      let match: RegExpExecArray | null;
-      LOCALHOST_URL_REGEX.lastIndex = 0;
+        LOCALHOST_URL_REGEX.lastIndex = 0;
+        let match: RegExpExecArray | null;
 
-      while ((match = LOCALHOST_URL_REGEX.exec(content)) !== null) {
-        const url = match[0];
-        const index = match.index;
-        const loc = getLocationFromIndex(content, index);
+        while ((match = LOCALHOST_URL_REGEX.exec(content)) !== null) {
+          const url = match[0];
+          const index = match.index;
+          const loc = getLocationFromIndex(content, index);
 
-        findings.push(
-          createFinding({
-            ruleId: this.id,
-            title: 'Hardcoded localhost URL detected',
-            severity: 'medium',
-            category: this.category,
-            message: `A hardcoded development URL (${url}) was detected in ${file.relativePath}. If deployed to production, client requests will target the end-user's local machine or fail to resolve.`,
-            evidence: loc.lineSnippet || url,
-            file: file.relativePath,
-            line: loc.line,
-            column: loc.column,
-            remediation:
-              'Replace the hardcoded URL with a dynamic environment variable (e.g. process.env.API_URL or NEXT_PUBLIC_API_URL) or a relative path.',
-            confidence: 'high',
-            documentationUrl: this.documentationUrl,
-          }),
-        );
+          findings.push(
+            createFinding({
+              ruleId: this.id,
+              title: 'Hardcoded localhost URL detected',
+              severity: 'medium',
+              category: this.category,
+              message: `A hardcoded development URL (${url}) was detected in ${file.relativePath}. If deployed to production, client requests will target the end-user's local machine or fail to resolve.`,
+              evidence: loc.lineSnippet || url,
+              file: file.relativePath,
+              line: loc.line,
+              column: loc.column,
+              remediation:
+                'Replace the hardcoded URL with a dynamic environment variable (e.g. process.env.API_URL or NEXT_PUBLIC_API_URL) or a relative path.',
+              confidence: 'high',
+              documentationUrl: this.documentationUrl,
+            }),
+          );
+        }
       }
     }
 
