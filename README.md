@@ -1,326 +1,303 @@
 # AI App Production Auditor
 
-**Find production-readiness issues in AI-generated applications before they reach your users.**
+**Find configuration problems, missing quality checks, and production-readiness issues in web applications before deployment.**
 
-AI coding tools make it easier than ever to build applications. However, a successful preview or development build doesn't guarantee that an application is ready for production.
+AI coding assistants make prototyping and rapid development faster than ever. However, a working prototype or local development preview does not guarantee that an application is safe, consistent, and ready for production.
 
-AI App Production Auditor is an open-source command-line tool designed to identify common configuration problems, missing quality checks, and potential deployment issues in web applications.
+**AI App Production Auditor** is an open-source, offline TypeScript command-line tool that inspects web applications for common configuration oversights, missing quality controls, exposed secrets, and deployment failure patterns—particularly in applications generated or accelerated by AI tools.
 
-The goal is simple: help developers catch preventable problems earlier and make the transition from prototype to production more predictable.
+The auditor runs **100% locally and offline**. It requires **no LLM APIs, no paid subscriptions, no cloud services, and no external network access**. It prioritizes reliable, evidence-backed diagnostics over speculation.
 
-> **Status:** Early development. Features and supported checks will evolve as the project matures. See the roadmap for planned functionality.
+---
 
-## Why This Project Exists
+## Current Status
 
-Applications built with AI coding assistants can encounter problems when moving from development to production:
+- **Version:** `0.1.0`
+- **Release Stage:** Initial Production Release
+- **Environment:** Node.js `>= 20.0.0` (LTS)
+- **Supported Languages:** TypeScript and JavaScript web applications
 
-- Frontend applications configured to call localhost API endpoints.
-- Missing or inconsistent environment-variable configuration.
-- Incomplete test and build scripts.
-- Potentially unsafe production configuration.
-- Missing API contracts and integration checks.
-- Deployment assumptions that don't hold outside the development environment.
+All diagnostic rules, file safeguards, configuration loaders, exit codes, and report formats documented below are **implemented and verified** with automated unit and integration test suites.
 
-These problems aren't unique to AI-generated software, but rapid AI-assisted development can make it easier to overlook them.
+---
 
-AI App Production Auditor aims to provide a repeatable way to inspect an application, surface actionable findings, and help developers prioritize their next steps.
+## Why This Tool Exists
 
-## Features
+Applications developed with AI coding assistants frequently suffer from characteristic deployment traps:
 
-The following capabilities represent the project's intended scope. Individual features will be marked as implemented as they become available.
+1. **Hardcoded Localhost Endpoints:** Frontend code directly targeting `http://localhost:3000` or `127.0.0.1` that silently fails when deployed to end-user browsers.
+2. **Inconsistent Environment Configuration:** Code accessing `process.env.VAR` or `import.meta.env.VAR` without declaring the variable in `.env.example` or `.env.template`.
+3. **Missing Automated Quality Scripts:** Missing or placeholder test scripts (`"echo \"Error: no test specified\" && exit 1"`), missing production build commands, or absent typecheck scripts.
+4. **Accidentally Tracked Credentials:** Real `.env` files, API tokens, AWS keys, or private keys committed to the repository.
+5. **Insecure Production Defaults:** Disabled TLS validation (`rejectUnauthorized: false`), public client exposure of private keys via `NEXT_PUBLIC_*` or `VITE_*` prefixes, or unpinned wildcard dependencies.
 
-### Static Analysis
+The auditor provides an automated, repeatable sanity check to catch these preventable issues early.
 
-- [ ] Detect supported project types and frameworks.
-- [ ] Identify hardcoded localhost URLs in application configuration and source files.
-- [ ] Inspect environment-variable references and example configuration files.
-- [ ] Detect potential secrets using established scanning techniques.
-- [ ] Identify missing or incomplete test scripts.
-- [ ] Inspect dependency manifests and project scripts.
-- [ ] Flag potentially unsafe production configuration.
+---
 
-### Build and Integration Checks
+## Implemented Diagnostic Checks
 
-- [ ] Run explicitly configured lint, test, and build commands.
-- [ ] Check configured backend health endpoints.
-- [ ] Validate API responses against OpenAPI specifications.
-- [ ] Identify common frontend/backend contract mismatches.
-- [ ] Produce actionable diagnostic reports.
+Every check produces an evidence-backed diagnostic result with stable identifier, severity, file location, line snippet, explanation, and remediation advice.
 
-### Reporting
+| Rule ID  | Name                                   | Category      | Default Severity | Description                                                                                                             |
+| :------- | :------------------------------------- | :------------ | :--------------- | :---------------------------------------------------------------------------------------------------------------------- |
+| `PRJ001` | Project Structure & Manifest Integrity | Configuration | High             | Validates `package.json` syntax, detects project structure, and identifies monorepo workspaces.                         |
+| `URL001` | Hardcoded Localhost URL Detection      | Configuration | Medium           | Detects hardcoded `localhost`, `127.0.0.1`, `[::1]`, and loopback URLs in application source code.                      |
+| `ENV001` | Environment Variable Consistency       | Configuration | Medium           | Identifies variables referenced in code (`process.env`, `import.meta.env`) that are missing from `.env.example`.        |
+| `ENV002` | Missing Example Environment File       | Configuration | Medium           | Flags projects referencing custom environment variables when no `.env.example` or `.env.template` exists.               |
+| `TST001` | Automated Test Script Verification     | Testing       | Medium           | Flags missing test scripts or default npm placeholder test commands in `package.json`.                                  |
+| `TST002` | Test Framework Detection               | Testing       | Low              | Notes projects without a recognized testing framework (Vitest, Jest, Playwright, Cypress, Mocha).                       |
+| `BLD001` | Production Build Script Verification   | Quality       | High             | Flags compiled projects (TypeScript, Next.js, Vite, Nuxt) lacking a `build` script in `package.json`.                   |
+| `BLD002` | Type-Check Script Verification         | Quality       | Low              | Recommends adding a `typecheck` script (`tsc --noEmit`) to TypeScript projects.                                         |
+| `BLD003` | Lint Script Verification               | Quality       | Low              | Identifies projects without an automated linting command.                                                               |
+| `SEC001` | Embedded Secret & Credential Detection | Security      | Critical         | Detects AWS access keys, GitHub tokens, Slack tokens, private keys, and high-entropy API secrets with strict redaction. |
+| `SEC002` | Sensitive `.env` File in Repository    | Security      | Critical         | Flags actual `.env` or `.env.local` files present in the repository root instead of being ignored.                      |
+| `CFG001` | Insecure TLS Bypass Detection          | Security      | High             | Detects disabled TLS certificate validation (`rejectUnauthorized: false` or `NODE_TLS_REJECT_UNAUTHORIZED = '0'`).      |
+| `CFG002` | Leaked Client-Side Secret Prefix       | Security      | High             | Detects secrets prefixed with public identifiers (`NEXT_PUBLIC_*SECRET*`, `VITE_*PASSWORD*`).                           |
+| `CFG003` | `.gitignore` Completeness Verification | Configuration | Medium           | Identifies missing `.gitignore` files or `.gitignore` files missing `node_modules` or `.env`.                           |
+| `CFG004` | Unpinned Wildcard Dependencies         | Configuration | Low              | Flags wildcard dependencies (`"*"`, `"latest"`) in `package.json`.                                                      |
 
-- [ ] Human-readable terminal output.
-- [ ] Prioritized findings with severity levels.
-- [ ] File and line references when available.
-- [ ] Remediation guidance.
-- [ ] Markdown reports suitable for sharing or attaching to issues.
-- [ ] Machine-readable output for CI/CD integrations.
+---
 
-### AI-Assisted Diagnostics
+## Severity Model
 
-Planned optional AI capabilities may help developers understand findings and evaluate possible remediation strategies.
+Findings are categorized into five standard severity levels reflecting operational impact:
 
-AI-generated recommendations will be distinguished from verified diagnostic results. AI assistance will not be required for core static analysis.
+- **Critical:** Immediate security vulnerability or guaranteed production failure (e.g., exposed credentials, committed `.env` secrets).
+- **High:** Substantial deployment blocker or high-risk misconfiguration (e.g., missing build script in compiled project, disabled TLS validation, malformed package manifest).
+- **Medium:** Configuration mismatch or potential client failure (e.g., hardcoded localhost URL, undeclared environment variable in example file, placeholder test script).
+- **Low:** Quality hygiene recommendation (e.g., unpinned wildcard dependencies, missing typecheck or lint script).
+- **Info:** Contextual observation about project architecture (e.g., monorepo workspace scope).
 
-## How It Works
+---
 
-The intended workflow is straightforward:
+## Installation and Quick Start
 
-1. Point the auditor at a project directory.
-2. Detect the project's structure and supported technologies.
-3. Run applicable checks.
-4. Collect findings and supporting evidence.
-5. Generate a report with recommended next steps.
+### Local Development / Direct Usage
 
-The auditor is intended to complement existing development tools, not replace comprehensive testing, security reviews, deployment validation, or experienced engineering judgment.
-
-## Installation
-
-**Installation instructions will be published when the initial release is available.**
-
-The planned distribution method is npm.
-
-Once published, the intended usage will resemble:
+Clone the repository and build the CLI locally:
 
 ```bash
-npx ai-app-production-auditor ./my-app
+git clone https://github.com/adamblansett/ai-app-production-auditor.git
+cd ai-app-production-auditor
+npm ci
+npm run build
 ```
 
-This command is a proposed interface and is not yet guaranteed to work.
-
-## Usage
-
-The CLI interface is under development.
-
-The planned interface will support operations such as:
+Run the auditor against any target directory:
 
 ```bash
-ai-app-production-auditor ./my-app
+# Basic terminal report
+node dist/cli.js ./my-app
+
+# Markdown report written to file
+node dist/cli.js ./my-app --format markdown --output readiness-report.md
+
+# Machine-readable JSON report
+node dist/cli.js ./my-app --format json
 ```
 
-Generate a Markdown report:
-
-```bash
-ai-app-production-auditor ./my-app \
-  --format markdown \
-  --output readiness-report.md
-```
-
-Exact commands and supported options will be documented alongside the corresponding implementation.
-
-## Example Findings
-
-The following example illustrates the type of diagnostic information the auditor aims to provide. It is illustrative, not output from a released version.
+### CLI Command Options
 
 ```text
-AI APP PRODUCTION AUDITOR
+Usage: ai-app-production-auditor [options] [target-dir]
 
-Project: example-app
+Static production-readiness auditor for web applications built with AI coding assistants.
+
+Arguments:
+  target-dir              Path to the project directory to audit (default: ".")
+
+Options:
+  -V, --version           Output the version number
+  -f, --format <format>   Output format: "text", "markdown", or "json" (default: "text")
+  -o, --output <file>     Path to write report output
+  -w, --force             Overwrite output file if it already exists (default: false)
+  -s, --severity <level>  Minimum finding severity to cause a failure exit code
+                          (critical, high, medium, low, info, none) (default: "high")
+  -c, --config <file>     Path to custom auditor configuration file
+  -v, --verbose           Output detailed diagnostic and check information (default: false)
+  --no-color              Disable colored terminal output
+  -h, --help              Display help for command
+```
+
+---
+
+## Exit Codes
+
+The CLI returns predictable exit codes for automation and CI/CD pipelines:
+
+| Exit Code | Meaning                                                                                                |
+| :-------: | :----------------------------------------------------------------------------------------------------- |
+|    `0`    | **Success:** Audit completed with no findings meeting or exceeding the configured failure threshold.   |
+|    `1`    | **Failure:** Audit completed with findings meeting or exceeding the configured failure threshold.      |
+|    `2`    | **Usage / Configuration Error:** Invalid CLI arguments or malformed configuration file.                |
+|    `3`    | **Operational Error:** Target path does not exist, inaccessible directory, or fatal file-system error. |
+
+By default, the failure threshold is `high` (causing failure only on `high` and `critical` findings). Informational and medium findings do not fail CI by default unless `--severity medium` or a custom configuration is provided.
+
+---
+
+## Configuration File
+
+You can customize rules, severity thresholds, and ignore paths using a `.auditorrc.json` file in the root of your audited project, or via `--config <path>`.
+
+### Example `.auditorrc.json`:
+
+```json
+{
+  "schemaVersion": 1,
+  "severityThreshold": "high",
+  "rules": {
+    "URL001": {
+      "severity": "high"
+    },
+    "TST002": {
+      "enabled": false
+    }
+  },
+  "ignorePaths": ["legacy/**", "docs/**"],
+  "limits": {
+    "maxFiles": 5000,
+    "maxFileSizeBytes": 1048576
+  },
+  "followSymlinks": false
+}
+```
+
+---
+
+## Report Formats
+
+### 1. Terminal Output
+
+Formatted for human readability with ANSI colors (when supported), clear severity badges, file line references, and remediation guidance:
+
+```text
+========================================================
+              AI APP PRODUCTION AUDITOR
+========================================================
+
+Project: example-app (v1.0.0)
+Type:    typescript
+Stack:   React, Next.js
+Tools:   Vitest, ESLint
+Target:  /workspace/example-app
+
+AUDIT SUMMARY
+  Files Scanned: 24 | Duration: 18ms
+  Checks Run:    7 completed, 0 skipped, 0 failed
+
+  Total Findings: 1  [Critical: 0, High: 0, Medium: 1, Low: 0, Info: 0]
 
 FINDINGS
 
-[WARNING] Hardcoded Localhost URL
-  Location: src/lib/api.ts:12
-
-  A localhost URL was detected in application source.
-
-  Why it matters:
-  If this URL is used by a deployed browser, requests may
-  target the user's own machine instead of the intended API.
-
-  Recommended action:
-  Verify the intended deployment architecture and configure
-  the API endpoint appropriately.
-
-[WARNING] Test Script Not Detected
-  Location: package.json
-
-  No recognized test script was detected.
-
-  Recommended action:
-  Configure an appropriate automated test command.
-
-SUMMARY
-
-Findings: 2
+[MEDIUM]   Hardcoded localhost URL detected [URL001]
+  Location: src/lib/api.ts:12:25
+  Issue:    A hardcoded development URL (http://localhost:8000) was detected in src/lib/api.ts.
+  Evidence: const API_ENDPOINT = 'http://localhost:8000';
+  Action:   Replace the hardcoded URL with a dynamic environment variable (e.g. process.env.API_URL).
 ```
 
-A finding indicates something worth investigating, not necessarily a confirmed production defect. The auditor will document the limitations of individual checks and avoid presenting uncertain conclusions as facts.
+### 2. GitHub-Flavored Markdown Report
 
-## Supported Technologies
+Designed for attaching to pull requests or GitHub issues. Includes summary tables, expandable check details, and formatted code blocks:
 
-The initial development focus is JavaScript and TypeScript web applications.
+```bash
+node dist/cli.js ./my-app --format markdown --output audit-report.md
+```
 
-Potential future support includes:
+### 3. Machine-Readable JSON Report
 
-- React and Next.js.
-- Node.js and Express.
-- Angular.
-- Vue.
-- Python backend applications.
-- Flutter projects.
+Conforms to a versioned schema (`schemaVersion: 1.0.0`) suitable for programmatic consumption in CI workflows:
 
-Framework-specific checks will be introduced incrementally and documented as they become available.
+```bash
+node dist/cli.js ./my-app --format json > audit-report.json
+```
 
-A framework appearing on this list does not imply that comprehensive support is already implemented.
+---
 
-## Design Principles
+## Security & Reliability Safeguards
 
-### 1. Evidence over speculation
+When auditing third-party or untrusted codebases, the auditor adheres to strict defensive design:
 
-Findings should be tied to observable configuration, source code, test results, or other identifiable evidence.
+1. **Strictly Non-Destructive:** The scanner **never modifies files**, executes project scripts, or installs packages during an audit.
+2. **Offline & Network-Isolated:** The core engine makes zero HTTP requests and sends no telemetry or source code to external servers.
+3. **Secret Redaction:** Potential secrets and credentials detected by `SEC001` are **always redacted** in all report outputs (e.g., `AKIA****...****PLE`). Raw secret values are never printed.
+4. **Path & Symlink Traversal Protection:** The crawler does not follow symbolic links by default to prevent directory traversal loops or escaping the project root.
+5. **Scanning Bounds:** Configurable file limits (default: 5,000 files) and per-file size limits (default: 1 MB) protect against memory exhaustion on large repositories.
+6. **Binary Detection:** Automatically detects and skips compiled binary files via null-byte inspection.
+7. **Report Overwrite Protection:** Will not overwrite existing report files on disk unless `--force` (`-w`) is explicitly passed.
 
-### 2. Actionable diagnostics
+---
 
-A useful finding explains what was detected, why it may matter, and what the developer can investigate next.
+## Known Limitations
 
-### 3. Safe by default
+- **Static Analysis Scope:** The auditor inspects static text and configuration files. It does not execute JavaScript or perform dynamic runtime evaluation.
+- **Dynamic Property Access:** Indirect or computed environment variable access (e.g., `process.env[dynamicVariable]`) cannot always be extracted statically.
+- **Secret Detection Heuristics:** Secret detection relies on conservative pattern matching and well-known provider formats. It is not an exhaustive substitute for enterprise secret scanning tools (such as TruffleHog or Gitleaks).
+- **Not a Production Guarantee:** No automated static tool can guarantee that an application is free of bugs, scalable, or secure. Use this tool alongside automated tests, staging environments, code review, and production observability.
 
-The tool should inspect source files without executing project code unless the user explicitly enables execution-based checks.
+---
 
-Checks that execute build scripts or tests must account for the risks associated with running untrusted code.
+## Testing & Quality Verification
 
-### 4. Transparent limitations
+AI App Production Auditor includes a comprehensive Vitest test suite and synthetic fixture applications covering:
 
-Static analysis cannot establish that an entire application is production-ready.
+- Healthy reference applications
+- Hardcoded localhost endpoints
+- Inconsistent environment variable declarations
+- Incomplete and placeholder test configurations
+- Synthetic credentials and complete redaction
+- Malformed `package.json` manifests
+- Monorepositories and subpackages
+- Path traversal, symlinks, binary files, and size limits
+- Report serializers and CLI exit codes
 
-Results must distinguish confirmed observations from potential risks and checks that could not be completed.
+### Running Verification Locally
 
-### 5. AI is optional
+```bash
+# Verify formatting
+npm run format:check
 
-Core diagnostic functionality should work without an LLM API, paid subscription, or external AI service.
+# Run ESLint
+npm run lint
 
-### 6. Open and extensible
+# Run strict TypeScript type check
+npm run typecheck
 
-The project should favor clear interfaces, testable components, documented checks, and contributions that improve reliability.
+# Run unit and integration tests
+npm test
 
-## Security and Privacy
+# Build production package
+npm run build
+```
 
-Source code and configuration files may contain sensitive information.
+---
 
-The project aims to make local inspection the default and minimize unnecessary data collection.
+## Continuous Integration
 
-Security considerations include:
+GitHub Actions workflow is located at [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+The workflow executes:
 
-- Avoiding the disclosure of detected secrets in reports.
-- Redacting sensitive values from diagnostic output.
-- Requiring explicit permission before executing project commands.
-- Avoiding unexpected network requests.
-- Documenting the behavior of optional integrations.
-- Treating scanned repositories and their contents as untrusted input.
+- Multi-version Node.js matrix (`20.x`, `22.x`)
+- Formatting verification (`prettier --check`)
+- Linting (`eslint`)
+- Strict type checking (`tsc --noEmit`)
+- Complete Vitest test suite (`vitest run`)
+- Production compilation (`tsc -p tsconfig.build.json`)
+- CLI binary execution smoke tests
 
-The presence of a secret-scanning check does not guarantee that all credentials or sensitive information will be detected.
-
-**Never commit real credentials, API keys, private keys, or production secrets to a repository.**
-
-## Development
-
-Development prerequisites and setup instructions will be documented as the initial implementation is established.
-
-The intended development stack includes:
-
-- TypeScript.
-- Node.js.
-- A command-line interface.
-- Vitest for automated testing.
-- GitHub Actions for continuous integration.
-
-The project will prioritize automated tests for individual checks, representative fixtures, and expected diagnostic results.
-
-## Roadmap
-
-### Phase 1: Core CLI
-
-- [ ] Establish the project structure and development workflow.
-- [ ] Implement command-line argument parsing.
-- [ ] Detect supported project types.
-- [ ] Implement initial static-analysis checks.
-- [ ] Add severity levels and diagnostic evidence.
-- [ ] Add automated tests and representative fixtures.
-- [ ] Generate terminal and Markdown reports.
-
-### Phase 2: Production Verification
-
-- [ ] Add configurable build and test execution.
-- [ ] Introduce backend health checks.
-- [ ] Add OpenAPI validation.
-- [ ] Improve frontend/backend integration diagnostics.
-- [ ] Establish safe execution defaults and clear permission boundaries.
-
-### Phase 3: Developer Workflow Integration
-
-- [ ] Add machine-readable report formats.
-- [ ] Support CI/CD integration.
-- [ ] Publish reusable GitHub Actions examples.
-- [ ] Document configuration and customization.
-
-### Phase 4: Optional AI Assistance
-
-- [ ] Add provider-independent evaluation interfaces.
-- [ ] Support optional AI-generated explanations.
-- [ ] Evaluate recommendations against known diagnostic cases.
-- [ ] Track false positives and recommendation quality.
-
-Roadmap items are goals, not promises about release dates.
-
-## Contributing
-
-Contributions are welcome.
-
-Useful contributions include:
-
-- Additional static-analysis checks.
-- Reproducible bug reports.
-- Test fixtures demonstrating real failure patterns.
-- Framework-specific diagnostics.
-- Documentation improvements.
-- Performance and reliability improvements.
-
-Before submitting a contribution:
-
-1. Review the existing issues and contribution guidelines.
-2. Include tests for new behavior.
-3. Document limitations and possible false positives.
-4. Avoid including sensitive information in test fixtures.
-5. Verify that existing tests continue to pass.
-
-Contribution instructions will be expanded as the project structure stabilizes.
-
-## Who Is This For?
-
-AI App Production Auditor is intended for:
-
-- Developers using AI coding assistants.
-- Engineers maintaining rapidly developed applications.
-- Teams validating application configuration before deployment.
-- Consultants assessing application quality.
-- Developers building repeatable software-quality workflows.
-- Engineering teams integrating additional checks into CI/CD.
-
-## Limitations
-
-No automated auditor can guarantee that an application is secure, reliable, scalable, or production-ready.
-
-Static checks can miss runtime failures. Configuration checks may produce false positives. Successful builds do not establish that application behavior is correct.
-
-Use the auditor alongside appropriate automated tests, manual review, security tooling, staging environments, and production monitoring.
+---
 
 ## License
 
-The project is intended to be released under the MIT License.
+This project is licensed under the [MIT License](LICENSE).
 
-The license file will be included before the first public release.
+---
 
 ## Author
 
-Created by **Adam Blansett**, a full-stack software engineer working across application architecture, backend systems, mobile development, cloud infrastructure, automation, and AI-assisted engineering.
+Created by **Adam Blansett**
 
-Website: [https://adamblansett.com](https://adamblansett.com)
-
-GitHub: [https://github.com/adamblansett](https://github.com/adamblansett)
-
-## Project Goals
-
-The long-term goal is to make production-readiness checks more accessible, repeatable, and actionable for developers building software with AI assistance.
-
-AI can accelerate application development. Reliable engineering practices help turn that speed into maintainable software.
+- **Website:** [https://adamblansett.com](https://adamblansett.com)
+- **GitHub:** [https://github.com/adamblansett](https://github.com/adamblansett)

@@ -1,0 +1,12 @@
+{
+  "name": "env-inconsistent-app",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.3"
+  }
+}

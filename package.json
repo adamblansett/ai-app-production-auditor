@@ -1,0 +1,66 @@
+{
+  "name": "ai-app-production-auditor",
+  "version": "0.1.0",
+  "description": "Developer tool that identifies common configuration problems, missing quality checks, and potential production-readiness issues in web applications.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "ai-app-production-auditor": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "prepack": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/adamblansett/ai-app-production-auditor.git"
+  },
+  "keywords": [
+    "audit",
+    "production-readiness",
+    "ai-code",
+    "code-quality",
+    "static-analysis",
+    "security-scanner",
+    "cli"
+  ],
+  "author": {
+    "name": "Adam Blansett",
+    "url": "https://adamblansett.com"
+  },
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/adamblansett/ai-app-production-auditor/issues"
+  },
+  "homepage": "https://github.com/adamblansett/ai-app-production-auditor#readme",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "commander": "^12.1.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.13.0",
+    "@types/node": "^22.8.1",
+    "eslint": "^9.13.0",
+    "prettier": "^3.3.3",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.11.0",
+    "vitest": "^2.1.3"
+  }
+}
