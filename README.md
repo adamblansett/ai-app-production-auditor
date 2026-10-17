@@ -320,6 +320,32 @@ The workflow executes:
 
 ---
 
+## ⚖️ Legal Disclaimer & Limitation of Liability
+
+### 1. "AS IS" and Express Warranty Disclaimer
+This software, documentation, and all associated audit reports, scoring outputs, and recommendations are provided strictly on an **"AS IS"** and **"AS AVAILABLE"** basis, **WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND**, either express, implied, statutory, or otherwise. To the maximum extent permitted by applicable law, the author, copyright holders, and contributors expressly disclaim all warranties, including but not limited to:
+- Implied warranties of merchantability, fitness for a particular purpose, title, quiet enjoyment, and non-infringement.
+- Any warranty that the software will meet your specific business or engineering requirements, operate without interruption, be defect-free, error-free, secure, or free from bugs, vulnerabilities, or malicious code.
+- Any warranty regarding the accuracy, completeness, reliability, or timeliness of any audit findings, risk scores, or diagnostic reports.
+
+### 2. Not a Formal Security Audit or Regulatory Certification
+- **Informational & Diagnostic Scope:** AI App Production Auditor is a heuristic static analysis tool designed to aid developer code reviews. An audit score of "100%", zero detected findings, or a passing status does **not** constitute a formal cybersecurity audit, penetration test, or software security certification.
+- **No Regulatory Compliance Guarantee:** This tool does **not** certify compliance with any regulatory standard, legal framework, or industry benchmark, including but not limited to SOC 2, ISO/IEC 27001, HIPAA, PCI-DSS, GDPR, CCPA, or NIST SP 800-53. The absence of findings does not guarantee immunity from cyberattacks, data breaches, unauthorized access, or regulatory enforcement actions.
+- **Not Legal Counsel:** Findings, explanations, and remediation advice do not constitute legal or regulatory advice. Users are solely responsible for engaging qualified security assessors and legal counsel to evaluate their software before production deployment.
+
+### 3. Automated Remediation & Safe File Modification Notice
+- Where automated repair or remediation features (`--fix`) are invoked, the tool applies heuristic text and configuration transformations to source files.
+- Users are strictly required to verify all proposed modifications (using `--dry-run` or version control diffs) and maintain independent, verified backups prior to applying changes.
+- The author and contributors accept no responsibility or liability for lost files, corrupted configuration syntax, unintended code modifications, broken builds, operational downtime, or data corruption resulting from the application of automated fixes.
+
+### 4. Limitation of Liability
+To the maximum extent permitted by applicable law, **IN NO EVENT SHALL THE AUTHOR, COPYRIGHT HOLDERS, OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, PUNITIVE, OR CONSEQUENTIAL DAMAGES** (including, but not limited to, loss of use, data, revenue, profits, business, goodwill, or anticipated savings; system downtime; security breaches; data corruption; or procurement of substitute goods or services), however caused and on any theory of liability, whether in contract, strict liability, tort (including negligence or otherwise), or statute, arising in any way out of the use, reproduction, modification, distribution, or reliance upon this software, even if advised of the possibility of such damages.
+
+### 5. Third-Party Trademarks & Non-Affiliation
+All product names, logos, brands, and registered trademarks mentioned within this project (including Next.js, React, Node.js, Express, FastAPI, Django, Flutter, Prisma, Supabase, Firebase, Stripe, AWS, Google, and OpenAI) are the property of their respective owners. Reference to any specific company, platform, product, or service does not constitute or imply endorsement, sponsorship, or affiliation with the author.
+
+---
+
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
