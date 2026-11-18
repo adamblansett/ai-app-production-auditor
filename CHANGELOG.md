@@ -18,8 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `ENV001` & `ENV002`: Environment variable consistency and missing `.env.example` checks.
   - `TST001` & `TST002`: Automated test script and test framework configuration checks.
   - `BLD001`, `BLD002`, `BLD003`: Build, type-check, and lint script verification.
-  - `SEC001` & `SEC002`: Conservative secret detection with strict redaction across all reports (including AWS, GitHub, Slack, OpenAI, Anthropic, and Hugging Face keys).
-  - `CFG001`, `CFG002`, `CFG003`, `CFG004`, `CFG005`, `CFG006`: Production configuration heuristics (TLS verification, frontend secret exposure, `.gitignore` validation, unpinned dependencies, Dockerfile root checks, SQL injection interpolation).
+  - `SEC001`, `SEC002`, `SEC003`: Conservative secret detection with strict redaction across all reports (including AWS, GitHub, Slack, Google Cloud/Gemini, Stripe, Twilio, database URIs, OpenAI, Anthropic, and Hugging Face keys), `.env` repository tracking detection, and dangerous dynamic code execution analysis (`eval()`, `new Function()`, `vm`).
+  - `CFG001`, `CFG002`, `CFG003`, `CFG004`, `CFG005`, `CFG006`, `CFG007`: Production configuration heuristics (TLS verification, frontend secret exposure, `.gitignore` validation, unpinned dependencies, Dockerfile root checks, SQL injection interpolation, permissive CORS with credentials).
   - `AI001`, `AI002`, `AI003`: AI application safety and hygiene diagnostics (dangerouslyAllowBrowser bypasses, raw stream DOM injection XSS, unimplemented stubs and placeholder credentials).
 - Multi-format report generation:
   - Readable terminal output with ANSI styling, severity grouping, and remediation logs.
@@ -48,3 +48,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Overwrite protection for report generation on disk (`--force`).
 - Versioned configuration file support (`.auditorrc.json`).
 - Synthetic test fixtures and full test suite covering rules, edge cases, safeguards, and CLI execution.
+
+### Security
+
+- Upgraded `zod` dependency from `^3.23.8` to `^3.24.2` to address security advisory GHSA-mrhx-c7xc-m3w5.
+- Added dynamic code execution detection (`SEC003`) to identify dangerous uses of `eval()`, `window.eval()`, `globalThis.eval()`, `new Function()`, and `node:vm`.
+- Added permissive CORS misconfiguration detection (`CFG007`) for reflective and wildcard origins paired with `credentials: true`.
+- Expanded secret pattern signatures in `SEC001` for Google Cloud/Gemini API keys, Stripe live keys, Twilio Account SIDs, and database connection strings with credentials.

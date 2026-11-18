@@ -47,6 +47,27 @@ const SECRET_PATTERNS: SecretPattern[] = [
     extractValue: (m) => m[0],
   },
   {
+    name: 'Google Cloud or Gemini API Key',
+    regex: /\bAIzaSy[-a-zA-Z0-9_]{33}\b/g,
+    extractValue: (m) => m[0],
+  },
+  {
+    name: 'Stripe Live Secret Key',
+    regex: /\b[sr]k_live_[0-9a-zA-Z]{24,}\b/g,
+    extractValue: (m) => m[0],
+  },
+  {
+    name: 'Twilio Account SID',
+    regex: /\bAC[a-f0-9]{32}\b/g,
+    extractValue: (m) => m[0],
+  },
+  {
+    name: 'Database Connection String with Password',
+    regex:
+      /\b(?:postgres|postgresql|mysql|mongodb|mongodb\+srv|redis):\/\/[a-zA-Z0-9_.%-]+:[^@\s"']+@[a-zA-Z0-9_.-]+/gi,
+    extractValue: (m) => m[0],
+  },
+  {
     name: 'Hardcoded API Secret Assignment',
     regex:
       /(?:api[_-]?key|secret|password|auth[_-]?token|access[_-]?token|private[_-]?key)\s*[:=]\s*["']([A-Za-z0-9_\-+/]{24,})["']/gi,
@@ -150,6 +171,28 @@ export class SecretDetectionRule implements Rule {
               remediation:
                 'Remove the credential immediately, rotate the key in the provider dashboard, and store it securely using environment variables or a secret manager.',
               confidence: 'high',
+              documentationUrl: this.documentationUrl,
+            }),
+          );
+        }
+
+        // SEC003: Check for dangerous dynamic code execution (eval, new Function, vm)
+        const evalMatches = context.analyzer.analyzeDangerousEval(file);
+        for (const ev of evalMatches) {
+          findings.push(
+            createFinding({
+              ruleId: 'SEC003',
+              title: `Dangerous dynamic code execution via ${ev.pattern}`,
+              severity: 'high',
+              category: this.category,
+              message: ev.explanation,
+              evidence: ev.location.snippet || ev.pattern,
+              file: file.relativePath,
+              line: ev.location.line,
+              column: ev.location.column,
+              remediation:
+                'Avoid dynamic code evaluation (eval, new Function, vm.runInContext). Refactor to use safe parser libraries or static logic.',
+              confidence: ev.confidence,
               documentationUrl: this.documentationUrl,
             }),
           );

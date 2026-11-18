@@ -11,7 +11,7 @@ export const AuditorConfigSchema = z.object({
     .enum(['critical', 'high', 'medium', 'low', 'info', 'none'])
     .default('high')
     .optional(),
-  rules: z.record(RuleConfigSchema).optional().default({}),
+  rules: z.record(z.string(), RuleConfigSchema).optional().default({}),
   ignorePaths: z.array(z.string()).optional().default([]),
   limits: z
     .object({

@@ -9,6 +9,8 @@ import type {
   SecretLiteralMatch,
   AiSafetyMatch,
   SqlInjectionMatch,
+  DangerousEvalMatch,
+  CorsMisconfigMatch,
 } from './types.js';
 import { findLocalhostUrlsInAst } from './visitors/url-visitor.js';
 import { findEnvironmentVariablesInAst } from './visitors/environment-visitor.js';
@@ -16,6 +18,8 @@ import {
   findInsecureTlsInAst,
   findClientExposedSecretsInAst,
   findSecretLiteralsInAst,
+  findDangerousEvalInAst,
+  findCorsMisconfigurationInAst,
 } from './visitors/security-visitor.js';
 import { findAiSafetyIssuesInAst, findSqlInjectionInAst } from './visitors/ai-safety-visitor.js';
 
@@ -31,6 +35,8 @@ export class SourceAnalyzer {
   private readonly secretLiteralCache = new Map<string, SecretLiteralMatch[]>();
   private readonly aiSafetyCache = new Map<string, AiSafetyMatch[]>();
   private readonly sqlInjectionCache = new Map<string, SqlInjectionMatch[]>();
+  private readonly evalCache = new Map<string, DangerousEvalMatch[]>();
+  private readonly corsCache = new Map<string, CorsMisconfigMatch[]>();
 
   constructor(fileCollection: FileCollectionResult) {
     this.fileCollection = fileCollection;
@@ -158,6 +164,34 @@ export class SourceAnalyzer {
 
     const results = findSqlInjectionInAst(parsed.sourceFile);
     this.sqlInjectionCache.set(file.relativePath, results);
+    return results;
+  }
+
+  analyzeDangerousEval(file: CollectedFile): DangerousEvalMatch[] {
+    if (!this.isEligibleForAst(file.relativePath)) return [];
+    if (this.evalCache.has(file.relativePath)) {
+      return this.evalCache.get(file.relativePath)!;
+    }
+
+    const parsed = this.getParsedSource(file.relativePath);
+    if (!parsed) return [];
+
+    const results = findDangerousEvalInAst(parsed.sourceFile);
+    this.evalCache.set(file.relativePath, results);
+    return results;
+  }
+
+  analyzeCors(file: CollectedFile): CorsMisconfigMatch[] {
+    if (!this.isEligibleForAst(file.relativePath)) return [];
+    if (this.corsCache.has(file.relativePath)) {
+      return this.corsCache.get(file.relativePath)!;
+    }
+
+    const parsed = this.getParsedSource(file.relativePath);
+    if (!parsed) return [];
+
+    const results = findCorsMisconfigurationInAst(parsed.sourceFile);
+    this.corsCache.set(file.relativePath, results);
     return results;
   }
 

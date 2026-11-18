@@ -111,6 +111,28 @@ export class ProductionConfigRule implements Rule {
             }),
           );
         }
+
+        // CFG007 via AST: Insecure CORS wildcard with credentials
+        const corsMatches = context.analyzer.analyzeCors(file);
+        for (const cm of corsMatches) {
+          findings.push(
+            createFinding({
+              ruleId: 'CFG007',
+              title: 'Insecure CORS wildcard or dynamic origin with credentials',
+              severity: 'high',
+              category: this.category,
+              message: cm.explanation,
+              evidence: cm.snippet,
+              file: file.relativePath,
+              line: cm.location.line,
+              column: cm.location.column,
+              remediation:
+                'Specify an explicit, trusted whitelist of allowed origins when credentials (cookies, authorization headers) are enabled.',
+              confidence: cm.confidence,
+              documentationUrl: this.documentationUrl,
+            }),
+          );
+        }
       } else {
         // Fallback pattern matching for non-script configuration files (.env, .json)
         const content = context.getFileContent(file.relativePath);

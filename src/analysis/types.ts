@@ -66,3 +66,17 @@ export interface SqlInjectionMatch {
   readonly confidence: 'high' | 'medium';
   readonly snippet: string;
 }
+
+export interface DangerousEvalMatch {
+  readonly pattern: string;
+  readonly explanation: string;
+  readonly location: SourceLocation;
+  readonly confidence: 'high' | 'medium';
+}
+
+export interface CorsMisconfigMatch {
+  readonly explanation: string;
+  readonly location: SourceLocation;
+  readonly confidence: 'high';
+  readonly snippet: string;
+}

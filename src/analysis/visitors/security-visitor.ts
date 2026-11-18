@@ -1,5 +1,11 @@
 import ts from 'typescript';
-import type { InsecureTlsMatch, ClientSecretExposure, SecretLiteralMatch } from '../types.js';
+import type {
+  InsecureTlsMatch,
+  ClientSecretExposure,
+  SecretLiteralMatch,
+  DangerousEvalMatch,
+  CorsMisconfigMatch,
+} from '../types.js';
 import { getNodeLocation } from '../parser.js';
 import { isProcessEnv } from './environment-visitor.js';
 
@@ -68,6 +74,23 @@ const SECRET_PATTERNS = [
   {
     name: 'Hugging Face Access Token',
     regex: /\bhf_[a-zA-Z0-9]{34,}\b/g,
+  },
+  {
+    name: 'Google Cloud or Gemini API Key',
+    regex: /\bAIzaSy[-a-zA-Z0-9_]{33}\b/g,
+  },
+  {
+    name: 'Stripe Live Secret Key',
+    regex: /\b[sr]k_live_[0-9a-zA-Z]{24,}\b/g,
+  },
+  {
+    name: 'Twilio Account SID',
+    regex: /\bAC[a-f0-9]{32}\b/g,
+  },
+  {
+    name: 'Database Connection String with Password',
+    regex:
+      /\b(?:postgres|postgresql|mysql|mongodb|mongodb\+srv|redis):\/\/[a-zA-Z0-9_.%-]+:[^@\s"']+@[a-zA-Z0-9_.-]+/gi,
   },
 ];
 
@@ -301,6 +324,122 @@ export function findSecretLiteralsInAst(sourceFile: ts.SourceFile): SecretLitera
           secretType: 'Hardcoded API Secret Assignment',
           matchedValue: textToScan,
           location: getNodeLocation(sourceFile, node),
+        });
+      }
+    }
+
+    ts.forEachChild(node, visit);
+  }
+
+  visit(sourceFile);
+  return matches;
+}
+
+export function findDangerousEvalInAst(sourceFile: ts.SourceFile): DangerousEvalMatch[] {
+  const matches: DangerousEvalMatch[] = [];
+
+  function visit(node: ts.Node): void {
+    // 1. Direct call to eval(...) or window.eval / globalThis.eval / vm.runIn*
+    if (ts.isCallExpression(node)) {
+      let isEvalCall = false;
+      let pattern = 'eval';
+
+      if (ts.isIdentifier(node.expression) && node.expression.text === 'eval') {
+        isEvalCall = true;
+        pattern = 'eval()';
+      } else if (ts.isPropertyAccessExpression(node.expression)) {
+        const propName = node.expression.name.text;
+        const objText = node.expression.expression.getText(sourceFile);
+        if (
+          propName === 'eval' &&
+          (objText === 'window' || objText === 'globalThis' || objText === 'global')
+        ) {
+          isEvalCall = true;
+          pattern = `${objText}.eval()`;
+        } else if (
+          (propName === 'runInContext' ||
+            propName === 'runInNewContext' ||
+            propName === 'runInThisContext') &&
+          objText === 'vm'
+        ) {
+          isEvalCall = true;
+          pattern = `vm.${propName}()`;
+        }
+      }
+
+      if (isEvalCall) {
+        matches.push({
+          pattern,
+          explanation: `Dangerous dynamic code execution via ${pattern}. Using dynamic execution exposes the application to arbitrary code execution (RCE) and code injection.`,
+          location: getNodeLocation(sourceFile, node),
+          confidence: 'high',
+        });
+      }
+    }
+
+    // 2. new Function(...) or Function(...) constructor
+    if (
+      ts.isNewExpression(node) ||
+      (ts.isCallExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        node.expression.text === 'Function')
+    ) {
+      const expr = ts.isNewExpression(node) ? node.expression : node.expression;
+      if (ts.isIdentifier(expr) && expr.text === 'Function') {
+        matches.push({
+          pattern: 'new Function()',
+          explanation:
+            'Dynamic code execution via "new Function()". This is an eval alternative that enables arbitrary code execution.',
+          location: getNodeLocation(sourceFile, node),
+          confidence: 'high',
+        });
+      }
+    }
+
+    ts.forEachChild(node, visit);
+  }
+
+  visit(sourceFile);
+  return matches;
+}
+
+export function findCorsMisconfigurationInAst(sourceFile: ts.SourceFile): CorsMisconfigMatch[] {
+  const matches: CorsMisconfigMatch[] = [];
+
+  function visit(node: ts.Node): void {
+    if (ts.isObjectLiteralExpression(node)) {
+      let hasCredentialsTrue = false;
+      let hasWildcardOrTrueOrigin = false;
+      let originSnippet = '';
+
+      for (const prop of node.properties) {
+        if (!ts.isPropertyAssignment(prop)) continue;
+        const propName =
+          prop.name && (ts.isIdentifier(prop.name) || ts.isStringLiteral(prop.name))
+            ? prop.name.text.toLowerCase()
+            : '';
+
+        if (propName === 'credentials' && prop.initializer.kind === ts.SyntaxKind.TrueKeyword) {
+          hasCredentialsTrue = true;
+        }
+
+        if (propName === 'origin') {
+          if (prop.initializer.kind === ts.SyntaxKind.TrueKeyword) {
+            hasWildcardOrTrueOrigin = true;
+            originSnippet = 'origin: true';
+          } else if (ts.isStringLiteral(prop.initializer) && prop.initializer.text === '*') {
+            hasWildcardOrTrueOrigin = true;
+            originSnippet = 'origin: "*"';
+          }
+        }
+      }
+
+      if (hasCredentialsTrue && hasWildcardOrTrueOrigin) {
+        matches.push({
+          explanation: `Insecure CORS configuration detected (${originSnippet} with credentials: true). Allowing wildcard or untrusted origins alongside credentials permits malicious sites to read authenticated user data.`,
+          location: getNodeLocation(sourceFile, node),
+          confidence: 'high',
+          snippet: node.getText(sourceFile),
         });
       }
     }
