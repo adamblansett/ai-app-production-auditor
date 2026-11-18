@@ -89,6 +89,28 @@ export class ProductionConfigRule implements Rule {
             }),
           );
         }
+
+        // CFG006 via AST: Raw SQL query string interpolation
+        const sqlInjections = context.analyzer.analyzeSqlInjection(file);
+        for (const sql of sqlInjections) {
+          findings.push(
+            createFinding({
+              ruleId: 'CFG006',
+              title: 'Raw SQL query string interpolation / potential SQL injection',
+              severity: 'high',
+              category: this.category,
+              message: sql.explanation,
+              evidence: sql.snippet,
+              file: file.relativePath,
+              line: sql.location.line,
+              column: sql.location.column,
+              remediation:
+                'Use parameterized queries ($1, ? or Prisma.sql) instead of direct string concatenation or template interpolation.',
+              confidence: sql.confidence,
+              documentationUrl: this.documentationUrl,
+            }),
+          );
+        }
       } else {
         // Fallback pattern matching for non-script configuration files (.env, .json)
         const content = context.getFileContent(file.relativePath);
@@ -220,6 +242,79 @@ export class ProductionConfigRule implements Rule {
               documentationUrl: this.documentationUrl,
             }),
           );
+        }
+      }
+    }
+
+    // CFG005: Dockerfile & .dockerignore checks
+    if (context.hasFile('Dockerfile')) {
+      const dockerfileContent = context.getFileContent('Dockerfile');
+      if (dockerfileContent && !/^\s*USER\s+/m.test(dockerfileContent)) {
+        findings.push(
+          createFinding({
+            ruleId: 'CFG005',
+            title: 'Dockerfile runs container as root user',
+            severity: 'medium',
+            category: 'security',
+            message:
+              'No USER directive was detected in Dockerfile. Running containers as root increases exposure if the application is compromised.',
+            evidence: 'Missing USER directive in Dockerfile',
+            file: 'Dockerfile',
+            line: 1,
+            column: 1,
+            remediation:
+              'Create and switch to a non-privileged user (e.g. USER node or USER nonroot) in the Dockerfile.',
+            confidence: 'high',
+            documentationUrl: this.documentationUrl,
+          }),
+        );
+      }
+
+      if (!context.hasFile('.dockerignore')) {
+        findings.push(
+          createFinding({
+            ruleId: 'CFG005',
+            title: 'Missing .dockerignore file in project root',
+            severity: 'medium',
+            category: 'configuration',
+            message:
+              'Dockerfile exists but no .dockerignore was found. This creates a risk of leaking local secrets, .env files, and bulky node_modules into image layers.',
+            evidence: '.dockerignore does not exist',
+            file: null,
+            remediation:
+              'Create a .dockerignore file and exclude node_modules, .env, .git, and build caches.',
+            confidence: 'high',
+            documentationUrl: this.documentationUrl,
+          }),
+        );
+      } else {
+        const dockerignoreContent = context.getFileContent('.dockerignore');
+        if (dockerignoreContent) {
+          const lines = dockerignoreContent.split('\n').map((l) => l.trim().replace(/\/$/, ''));
+          const ignoresEnv = lines.some((l) => l === '.env' || l === '*.env');
+          const ignoresNodeModules = lines.some((l) => l === 'node_modules');
+
+          if (!ignoresEnv || !ignoresNodeModules) {
+            const missing: string[] = [];
+            if (!ignoresNodeModules) missing.push('node_modules');
+            if (!ignoresEnv) missing.push('.env');
+            findings.push(
+              createFinding({
+                ruleId: 'CFG005',
+                title: '.dockerignore is missing critical ignore patterns',
+                severity: 'medium',
+                category: 'configuration',
+                message: `.dockerignore is missing entries for: ${missing.join(', ')}.`,
+                evidence: `Missing patterns: ${missing.join(', ')}`,
+                file: '.dockerignore',
+                line: 1,
+                column: 1,
+                remediation: `Add ${missing.join(', ')} to your .dockerignore file.`,
+                confidence: 'high',
+                documentationUrl: this.documentationUrl,
+              }),
+            );
+          }
         }
       }
     }

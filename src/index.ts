@@ -25,6 +25,7 @@ export {
 } from './models/report.js';
 
 export type { Rule, RuleContext, RuleResult, CheckStatus } from './models/rule.js';
+export { defineRule } from './models/rule.js';
 export { createDefaultRules } from './rules/rule-registry.js';
 export * from './rules/index.js';
 
@@ -38,7 +39,11 @@ export {
 export { formatTerminalReport } from './reporters/terminal-reporter.js';
 export { formatMarkdownReport } from './reporters/markdown-reporter.js';
 export { formatJsonReport } from './reporters/json-reporter.js';
+export { formatSarifReport } from './reporters/sarif-reporter.js';
 export { writeReportToFile, type WriteReportOptions } from './reporters/writer.js';
+
+export { applyRemediations, type FixResult } from './core/fixer.js';
+export { parseSuppressions, type SuppressionMap } from './utils/suppression.js';
 
 export { redactSecret, redactEvidence, maskSensitiveValue } from './utils/redaction.js';
 export { collectFiles, type CollectedFile, type SkippedFile } from './fs/file-collector.js';

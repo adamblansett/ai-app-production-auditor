@@ -57,6 +57,18 @@ const SECRET_PATTERNS = [
     name: 'Private Key Block',
     regex: /-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----/g,
   },
+  {
+    name: 'OpenAI API Key',
+    regex: /\b(?:sk-[a-zA-Z0-9]{20,}|sk-proj-[-a-zA-Z0-9_]{40,})\b/g,
+  },
+  {
+    name: 'Anthropic API Key',
+    regex: /\bsk-ant-api[0-9]{2}-[-a-zA-Z0-9_]{80,}\b/g,
+  },
+  {
+    name: 'Hugging Face Access Token',
+    regex: /\bhf_[a-zA-Z0-9]{34,}\b/g,
+  },
 ];
 
 function isNodeTlsRejectUnauthorized(expr: ts.Expression): boolean {

@@ -2,13 +2,14 @@ import { Command } from 'commander';
 
 export interface CliOptions {
   targetDir: string;
-  format: 'text' | 'markdown' | 'json';
+  format: 'text' | 'markdown' | 'json' | 'sarif';
   output?: string;
   force?: boolean;
   severity?: 'critical' | 'high' | 'medium' | 'low' | 'info' | 'none';
   config?: string;
   verbose?: boolean;
   color: boolean;
+  fix?: boolean;
 }
 
 export function createCliCommand(): Command {
@@ -21,7 +22,11 @@ export function createCliCommand(): Command {
     )
     .version('0.1.0', '-V, --version', 'Output the version number')
     .argument('[target-dir]', 'Path to the project directory to audit', '.')
-    .option('-f, --format <format>', 'Output format: "text", "markdown", or "json"', 'text')
+    .option(
+      '-f, --format <format>',
+      'Output format: "text", "markdown", "json", or "sarif"',
+      'text',
+    )
     .option('-o, --output <file>', 'Path to write report output')
     .option('-w, --force', 'Overwrite output file if it already exists', false)
     .option(
@@ -29,6 +34,11 @@ export function createCliCommand(): Command {
       'Minimum finding severity to cause a failure exit code (critical, high, medium, low, info, none)',
     )
     .option('-c, --config <file>', 'Path to custom auditor configuration file')
+    .option(
+      '--fix',
+      'Automatically remediate safe, mechanical findings (.env.example, .gitignore, package.json)',
+      false,
+    )
     .option('-v, --verbose', 'Output detailed diagnostic and check information', false)
     .option('--no-color', 'Disable colored terminal output');
 

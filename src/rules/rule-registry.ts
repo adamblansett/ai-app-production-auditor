@@ -6,6 +6,7 @@ import { TestConfigurationRule } from './test-configuration.rule.js';
 import { PackageScriptsRule } from './package-scripts.rule.js';
 import { SecretDetectionRule } from './secret-detection.rule.js';
 import { ProductionConfigRule } from './production-config.rule.js';
+import { AiSafetyRule } from './ai-safety.rule.js';
 
 export function createDefaultRules(): Rule[] {
   return [
@@ -16,5 +17,6 @@ export function createDefaultRules(): Rule[] {
     new PackageScriptsRule(),
     new SecretDetectionRule(),
     new ProductionConfigRule(),
+    new AiSafetyRule(),
   ];
 }

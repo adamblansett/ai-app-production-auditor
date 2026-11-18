@@ -6,3 +6,4 @@ export * from './test-configuration.rule.js';
 export * from './package-scripts.rule.js';
 export * from './secret-detection.rule.js';
 export * from './production-config.rule.js';
+export * from './ai-safety.rule.js';

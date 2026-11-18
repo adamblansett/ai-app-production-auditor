@@ -32,6 +32,7 @@ export const ScanSummarySchema = z.object({
   skippedChecks: z.number().int().nonnegative(),
   filesScanned: z.number().int().nonnegative(),
   durationMs: z.number().nonnegative(),
+  suppressedFindings: z.number().int().nonnegative().optional(),
 });
 
 export const AuditReportSchema = z.object({
@@ -57,6 +58,15 @@ export const AuditReportSchema = z.object({
       reason: z.string(),
     }),
   ),
+  fixesApplied: z
+    .array(
+      z.object({
+        ruleId: z.string(),
+        description: z.string(),
+        fileModified: z.string(),
+      }),
+    )
+    .optional(),
 });
 
 export type AuditReport = z.infer<typeof AuditReportSchema>;

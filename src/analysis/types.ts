@@ -47,3 +47,22 @@ export interface SecretLiteralMatch {
   readonly matchedValue: string;
   readonly location: SourceLocation;
 }
+
+export interface AiSafetyMatch {
+  readonly issueType:
+    | 'client_browser_guard_bypass'
+    | 'raw_stream_dom_injection'
+    | 'unimplemented_stub'
+    | 'dummy_credential';
+  readonly explanation: string;
+  readonly location: SourceLocation;
+  readonly confidence: 'high' | 'medium';
+  readonly snippet: string;
+}
+
+export interface SqlInjectionMatch {
+  readonly location: SourceLocation;
+  readonly explanation: string;
+  readonly confidence: 'high' | 'medium';
+  readonly snippet: string;
+}

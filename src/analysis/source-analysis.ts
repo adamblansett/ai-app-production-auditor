@@ -7,6 +7,8 @@ import type {
   InsecureTlsMatch,
   ClientSecretExposure,
   SecretLiteralMatch,
+  AiSafetyMatch,
+  SqlInjectionMatch,
 } from './types.js';
 import { findLocalhostUrlsInAst } from './visitors/url-visitor.js';
 import { findEnvironmentVariablesInAst } from './visitors/environment-visitor.js';
@@ -15,6 +17,7 @@ import {
   findClientExposedSecretsInAst,
   findSecretLiteralsInAst,
 } from './visitors/security-visitor.js';
+import { findAiSafetyIssuesInAst, findSqlInjectionInAst } from './visitors/ai-safety-visitor.js';
 
 export class SourceAnalyzer {
   private readonly fileCollection: FileCollectionResult;
@@ -26,6 +29,8 @@ export class SourceAnalyzer {
   private readonly tlsCache = new Map<string, InsecureTlsMatch[]>();
   private readonly clientExposureCache = new Map<string, ClientSecretExposure[]>();
   private readonly secretLiteralCache = new Map<string, SecretLiteralMatch[]>();
+  private readonly aiSafetyCache = new Map<string, AiSafetyMatch[]>();
+  private readonly sqlInjectionCache = new Map<string, SqlInjectionMatch[]>();
 
   constructor(fileCollection: FileCollectionResult) {
     this.fileCollection = fileCollection;
@@ -125,6 +130,34 @@ export class SourceAnalyzer {
 
     const results = findSecretLiteralsInAst(parsed.sourceFile);
     this.secretLiteralCache.set(file.relativePath, results);
+    return results;
+  }
+
+  analyzeAiSafety(file: CollectedFile): AiSafetyMatch[] {
+    if (!this.isEligibleForAst(file.relativePath)) return [];
+    if (this.aiSafetyCache.has(file.relativePath)) {
+      return this.aiSafetyCache.get(file.relativePath)!;
+    }
+
+    const parsed = this.getParsedSource(file.relativePath);
+    if (!parsed) return [];
+
+    const results = findAiSafetyIssuesInAst(parsed.sourceFile, file.relativePath);
+    this.aiSafetyCache.set(file.relativePath, results);
+    return results;
+  }
+
+  analyzeSqlInjection(file: CollectedFile): SqlInjectionMatch[] {
+    if (!this.isEligibleForAst(file.relativePath)) return [];
+    if (this.sqlInjectionCache.has(file.relativePath)) {
+      return this.sqlInjectionCache.get(file.relativePath)!;
+    }
+
+    const parsed = this.getParsedSource(file.relativePath);
+    if (!parsed) return [];
+
+    const results = findSqlInjectionInAst(parsed.sourceFile);
+    this.sqlInjectionCache.set(file.relativePath, results);
     return results;
   }
 

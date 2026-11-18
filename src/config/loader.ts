@@ -30,11 +30,31 @@ export function loadConfig(targetDir: string, explicitConfigPath?: string): Conf
   }
 
   // Look for configuration candidates in the target directory
-  const candidateNames = ['.auditorrc.json', 'auditor.config.json'];
+  const candidateNames = ['.auditorrc.json', '.auditorrc', 'auditor.config.json'];
   for (const name of candidateNames) {
     const candidatePath = path.join(targetDir, name);
     if (fs.existsSync(candidatePath)) {
       return readAndValidateConfigFile(candidatePath);
+    }
+  }
+
+  // Check package.json for an "auditor" configuration section
+  const packageJsonPath = path.join(targetDir, 'package.json');
+  if (fs.existsSync(packageJsonPath)) {
+    try {
+      const rawText = fs.readFileSync(packageJsonPath, 'utf8');
+      const parsed = JSON.parse(rawText);
+      if (parsed && typeof parsed === 'object' && parsed.auditor) {
+        const parseResult = AuditorConfigSchema.safeParse(parsed.auditor);
+        if (parseResult.success) {
+          return {
+            config: parseResult.data,
+            configFilePath: packageJsonPath,
+          };
+        }
+      }
+    } catch {
+      // Continue to default config if package.json cannot be read as config
     }
   }
 

@@ -5,6 +5,7 @@ import { runAudit } from './core/engine.js';
 import { formatTerminalReport } from './reporters/terminal-reporter.js';
 import { formatMarkdownReport } from './reporters/markdown-reporter.js';
 import { formatJsonReport } from './reporters/json-reporter.js';
+import { formatSarifReport } from './reporters/sarif-reporter.js';
 import { writeReportToFile } from './reporters/writer.js';
 import { determineExitCode, ExitCode, type FailureThreshold } from './cli/exit-codes.js';
 import { setColorsEnabled } from './utils/text.js';
@@ -31,9 +32,9 @@ export async function runCli(argv = process.argv): Promise<number> {
 
   // Validate format
   const format = (opts.format || 'text').toLowerCase();
-  if (!['text', 'markdown', 'json'].includes(format)) {
+  if (!['text', 'markdown', 'json', 'sarif'].includes(format)) {
     process.stderr.write(
-      `Error: Invalid format "${format}". Supported formats: text, markdown, json.\n`,
+      `Error: Invalid format "${format}". Supported formats: text, markdown, json, sarif.\n`,
     );
     return ExitCode.INVALID_CONFIG_OR_USAGE;
   }
@@ -69,7 +70,7 @@ export async function runCli(argv = process.argv): Promise<number> {
   // Run audit engine
   let report;
   try {
-    report = await runAudit(targetDir, { config });
+    report = await runAudit(targetDir, { config, fix: opts.fix ?? false });
   } catch (err) {
     process.stderr.write(
       `Operational Error: ${err instanceof Error ? err.message : String(err)}\n`,
@@ -88,6 +89,9 @@ export async function runCli(argv = process.argv): Promise<number> {
       break;
     case 'json':
       outputContent = formatJsonReport(report);
+      break;
+    case 'sarif':
+      outputContent = formatSarifReport(report);
       break;
   }
 

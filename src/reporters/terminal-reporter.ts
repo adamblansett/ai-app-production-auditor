@@ -36,7 +36,22 @@ export function formatTerminalReport(report: AuditReport, verbose = false): stri
   lines.push(
     `  Checks Run:    ${report.summary.passedChecks} completed, ${report.summary.skippedChecks} skipped, ${report.summary.failedChecks} failed`,
   );
+  if (report.summary.suppressedFindings && report.summary.suppressedFindings > 0) {
+    lines.push(
+      `  Suppressed:    ${report.summary.suppressedFindings} finding(s) via inline comments`,
+    );
+  }
   lines.push('');
+
+  if (report.fixesApplied && report.fixesApplied.length > 0) {
+    lines.push(c.bold(c.green('REMEDIATIONS APPLIED (--fix):')));
+    for (const fix of report.fixesApplied) {
+      lines.push(
+        `  ${c.green('✓')} [${fix.ruleId}] ${fix.description} (${c.dim(fix.fileModified)})`,
+      );
+    }
+    lines.push('');
+  }
 
   const s = report.summary;
   lines.push(

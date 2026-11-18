@@ -9,10 +9,13 @@ import type { RuleContext, CheckStatus } from '../models/rule.js';
 import { AuditReportSchema, type AuditReport, type ScanSummary } from '../models/report.js';
 import type { Finding, Severity } from '../models/finding.js';
 import { SourceAnalyzer } from '../analysis/source-analysis.js';
+import { parseSuppressions, type SuppressionMap } from '../utils/suppression.js';
+import { applyRemediations, type FixResult } from './fixer.js';
 
 export interface AuditOptions {
   config?: AuditorConfig;
   rules?: ReturnType<typeof createDefaultRules>;
+  fix?: boolean;
 }
 
 export async function runAudit(
@@ -114,6 +117,108 @@ export async function runAudit(
     }
   }
 
+  // If --fix mode is requested, apply mechanical remediations and re-evaluate
+  let fixesApplied: FixResult[] = [];
+  if (options.fix) {
+    fixesApplied = applyRemediations(resolvedTarget, allFindings, ruleContext);
+    if (fixesApplied.length > 0) {
+      const refreshedFiles = collectFiles(resolvedTarget, {
+        limits: {
+          maxFiles: config.limits?.maxFiles ?? 5000,
+          maxFileSizeBytes: config.limits?.maxFileSizeBytes ?? 1024 * 1024,
+        },
+        ignorePaths: config.ignorePaths,
+        followSymlinks: config.followSymlinks ?? false,
+      });
+      const refreshedProject = detectProject(resolvedTarget);
+      const refreshedAnalyzer = new SourceAnalyzer(refreshedFiles);
+      const refreshedContext: RuleContext = {
+        targetDir: resolvedTarget,
+        project: refreshedProject,
+        files: refreshedFiles.files,
+        config: config.rules ?? {},
+        getFileContent: refreshedFiles.getFileContent,
+        hasFile: refreshedFiles.hasFile,
+        analyzer: refreshedAnalyzer,
+      };
+
+      allFindings.length = 0;
+      checks.length = 0;
+
+      for (const rule of rules) {
+        const ruleConfig = config.rules?.[rule.id];
+        if (ruleConfig?.enabled === false) {
+          checks.push({
+            id: rule.id,
+            name: rule.name,
+            description: rule.description,
+            status: 'skipped',
+            skippedReason: 'Disabled in auditor configuration',
+          });
+          continue;
+        }
+
+        try {
+          const result = await rule.execute(refreshedContext);
+          if (result.skipped) {
+            checks.push({
+              id: rule.id,
+              name: rule.name,
+              description: rule.description,
+              status: 'skipped',
+              skippedReason: result.skippedReason ?? 'Condition not applicable',
+            });
+            continue;
+          }
+
+          const findingsWithOverrides = result.findings.map((f) => {
+            if (ruleConfig?.severity) {
+              return { ...f, severity: ruleConfig.severity as Severity };
+            }
+            return f;
+          });
+
+          allFindings.push(...findingsWithOverrides);
+          checks.push({
+            id: rule.id,
+            name: rule.name,
+            description: rule.description,
+            status: 'completed',
+          });
+        } catch (err) {
+          checks.push({
+            id: rule.id,
+            name: rule.name,
+            description: rule.description,
+            status: 'failed',
+            skippedReason: `Rule execution failed: ${err instanceof Error ? err.message : String(err)}`,
+          });
+        }
+      }
+    }
+  }
+
+  // Apply inline comment suppressions
+  const suppressionMaps = new Map<string, SuppressionMap>();
+  const activeFindings: Finding[] = [];
+  let suppressedCount = 0;
+
+  for (const finding of allFindings) {
+    if (finding.file) {
+      let suppMap = suppressionMaps.get(finding.file);
+      if (!suppMap) {
+        const content = fileCollection.getFileContent(finding.file);
+        suppMap = parseSuppressions(content ?? '');
+        suppressionMaps.set(finding.file, suppMap);
+      }
+      if (suppMap.isSuppressed(finding.line, finding.ruleId)) {
+        suppressedCount++;
+        continue;
+      }
+    }
+    activeFindings.push(finding);
+  }
+
   // Calculate scan summary
   const severityCounts: Record<Severity, number> = {
     critical: 0,
@@ -123,7 +228,7 @@ export async function runAudit(
     info: 0,
   };
 
-  for (const finding of allFindings) {
+  for (const finding of activeFindings) {
     severityCounts[finding.severity] = (severityCounts[finding.severity] || 0) + 1;
   }
 
@@ -132,7 +237,7 @@ export async function runAudit(
   const failedCheckCount = checks.filter((c) => c.status === 'failed').length;
 
   const summary: ScanSummary = {
-    totalFindings: allFindings.length,
+    totalFindings: activeFindings.length,
     critical: severityCounts.critical,
     high: severityCounts.high,
     medium: severityCounts.medium,
@@ -143,6 +248,7 @@ export async function runAudit(
     skippedChecks: skippedChecks.length,
     filesScanned: fileCollection.files.length,
     durationMs: Date.now() - startTime,
+    suppressedFindings: suppressedCount,
   };
 
   const report: AuditReport = {
@@ -169,7 +275,7 @@ export async function runAudit(
       hasPackageJson: project.hasPackageJson,
     },
     summary,
-    findings: allFindings,
+    findings: activeFindings,
     checks,
     skippedFiles: [
       ...fileCollection.skippedFiles.map((s) => ({
@@ -181,6 +287,7 @@ export async function runAudit(
         reason: `Source parsing syntax warning: ${d.message}`,
       })),
     ],
+    fixesApplied,
   };
 
   // Validate the final report structure against the Zod schema

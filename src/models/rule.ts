@@ -50,3 +50,7 @@ export interface Rule {
 
   execute(context: RuleContext): Promise<RuleResult> | RuleResult;
 }
+
+export function defineRule(rule: Rule): Rule {
+  return rule;
+}

@@ -32,6 +32,21 @@ const SECRET_PATTERNS: SecretPattern[] = [
     extractValue: (m) => m[0],
   },
   {
+    name: 'OpenAI API Key',
+    regex: /\b(?:sk-[a-zA-Z0-9]{20,}|sk-proj-[-a-zA-Z0-9_]{40,})\b/g,
+    extractValue: (m) => m[0],
+  },
+  {
+    name: 'Anthropic API Key',
+    regex: /\bsk-ant-api[0-9]{2}-[-a-zA-Z0-9_]{80,}\b/g,
+    extractValue: (m) => m[0],
+  },
+  {
+    name: 'Hugging Face Access Token',
+    regex: /\bhf_[a-zA-Z0-9]{34,}\b/g,
+    extractValue: (m) => m[0],
+  },
+  {
     name: 'Hardcoded API Secret Assignment',
     regex:
       /(?:api[_-]?key|secret|password|auth[_-]?token|access[_-]?token|private[_-]?key)\s*[:=]\s*["']([A-Za-z0-9_\-+/]{24,})["']/gi,
