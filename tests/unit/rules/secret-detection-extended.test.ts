@@ -81,7 +81,11 @@ describe('SecretDetectionRule (Extended Cloud & Security Signatures)', () => {
   });
 
   it('detects database connection string with credentials in config', () => {
-    const dbUri = ['postgres://prod_user:', 'super_secret_password_123', '@db.prod.internal:5432/maindb'].join('');
+    const dbUri = [
+      'postgres://prod_user:',
+      'super_secret_password_123',
+      '@db.prod.internal:5432/maindb',
+    ].join('');
     const context = createMockContext({
       'config.json': JSON.stringify({ database_url: dbUri }),
     });
